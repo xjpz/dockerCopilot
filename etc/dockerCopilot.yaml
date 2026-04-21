@@ -7,3 +7,9 @@ Log:
 Auth:
   AccessSecret: ${secretKey}
   AccessExpire: 7257600
+#Proxy:
+#  Enable: true
+#  Http: "http://127.0.0.1:7890"
+#  Https: "http://127.0.0.1:7890"
+#  NoProxy: "localhost,127.0.0.1,192.168.0.0/16"
+#  InsecureSkipVerify: false

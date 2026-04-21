@@ -18,6 +18,10 @@ ENV secretKey="" \
     DOCKER_HOST="unix:///var/run/docker.sock" \
     BACKUP_DIR="/data/backups" \
     TZ="Asia/Shanghai"
+# 代理环境变量（可选，也可通过 etc/dockerCopilot.yaml 的 Proxy 配置项设置）
+#ENV HTTP_PROXY="http://host.docker.internal:7890" \
+#    HTTPS_PROXY="http://host.docker.internal:7890" \
+#    NO_PROXY="localhost,127.0.0.1"
 
 VOLUME ["/data"]
 # 设置启动命令

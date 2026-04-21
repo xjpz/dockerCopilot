@@ -10,13 +10,9 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
-func GetRemoteVersion() (remoteVersion string, err error) {
-	githubProxy := os.Getenv("githubProxy")
-	if githubProxy != "" {
-		githubProxy = strings.TrimRight(githubProxy, "/") + "/"
-	}
-	versionURL := githubProxy + "https://raw.githubusercontent.com/onlyLTY/dockerCopilot/UGREEN/version"
-	remoteVersion, err = fetchVersionFromURL(versionURL)
+func GetRemoteVersion(httpClient *http.Client) (remoteVersion string, err error) {
+	versionURL := buildGitHubURL("https://raw.githubusercontent.com/onlyLTY/dockerCopilot/UGREEN/version")
+	remoteVersion, err = fetchVersionFromURL(httpClient, versionURL)
 	if err != nil {
 		return "0.0.0", err
 	}
@@ -33,17 +29,19 @@ func GetRemoteVersion() (remoteVersion string, err error) {
 		logx.Infof("版本不一致! 本地: %s, 远程: %s\n", localVersion, remoteVersion)
 		return remoteVersion, nil
 	}
-
 }
 
-func fetchVersionFromURL(url string) (string, error) {
-	client := &http.Client{
-		Transport: &http.Transport{
-			Proxy: http.ProxyFromEnvironment,
-		},
+func buildGitHubURL(rawURL string) string {
+	githubProxy := os.Getenv("githubProxy")
+	if githubProxy != "" {
+		githubProxy = strings.TrimRight(githubProxy, "/") + "/"
+		return githubProxy + rawURL
 	}
+	return rawURL
+}
 
-	resp, err := client.Get(url)
+func fetchVersionFromURL(httpClient *http.Client, url string) (string, error) {
+	resp, err := httpClient.Get(url)
 	if err != nil {
 		return "", err
 	}

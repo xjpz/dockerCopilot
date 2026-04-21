@@ -36,7 +36,7 @@ func (l *VersionLogic) Version(req *types.VersionReq) (resp *types.Resp, err err
 		}
 		return resp, nil
 	} else if req.Type == "remote" {
-		remoteVersion, err := utiles.GetRemoteVersion()
+		remoteVersion, err := utiles.GetRemoteVersion(l.svcCtx.HTTPClient)
 		if err != nil {
 			resp.Code = 50001
 			resp.Msg = "获取版本错误" + err.Error()

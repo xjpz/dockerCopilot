@@ -1,18 +1,15 @@
 package module
 
 import (
-	"crypto/tls"
 	"errors"
 	"fmt"
 	ref "github.com/distribution/reference"
 	"github.com/onlyLTY/dockerCopilot/internal/types"
 	"github.com/zeromicro/go-zero/core/logx"
 	"io"
-	"net"
 	"net/http"
 	url2 "net/url"
 	"strings"
-	"time"
 )
 
 // ImageCheckList 检查更新处理后的镜像列表
@@ -20,14 +17,16 @@ type ImageCheckList struct {
 	NeedUpdate bool
 }
 type ImageUpdateData struct {
-	Data map[string]ImageCheckList
+	Data       map[string]ImageCheckList
+	httpClient *http.Client
 }
 
 const ContentDigestHeader = "Docker-Content-Digest"
 
-func NewImageCheck() *ImageUpdateData {
+func NewImageCheck(httpClient *http.Client) *ImageUpdateData {
 	return &ImageUpdateData{
-		Data: map[string]ImageCheckList{},
+		Data:       map[string]ImageCheckList{},
+		httpClient: httpClient,
 	}
 }
 func (i *ImageUpdateData) CheckUpdate(imageList []types.Image) {
@@ -40,16 +39,16 @@ func (i *ImageUpdateData) CheckUpdate(imageList []types.Image) {
 }
 
 func (i *ImageUpdateData) checkSingleImage(image types.Image) {
-	token, err := GetToken(image, "")
+	token, err := GetToken(image, "", i.httpClient)
 	if err != nil {
 		logx.Error("获取token失败或者无需获取token，继续尝试检查" + err.Error())
 	}
-	digestURL, err := BuildManifestURL(image)
+	digestURL, err := BuildManifestURL(image, i.httpClient)
 	if err != nil {
 		logx.Error("获取digestURL失败" + err.Error())
 		return
 	}
-	remoteDigest, err := GetDigest(digestURL, token)
+	remoteDigest, err := GetDigest(digestURL, token, i.httpClient)
 	if err != nil {
 		logx.Error("获取digest失败" + err.Error())
 		return
@@ -77,7 +76,7 @@ func (i *ImageUpdateData) checkSingleImage(image types.Image) {
 	i.Data[image.ID] = ImageCheckList{NeedUpdate: needUpdate}
 }
 
-func BuildManifestURL(image types.Image) (string, error) {
+func BuildManifestURL(image types.Image, httpClient *http.Client) (string, error) {
 	normalizedRef, err := ref.ParseDockerRef(image.ImageName + ":" + image.ImageTag)
 	if err != nil {
 		return "", err
@@ -87,7 +86,7 @@ func BuildManifestURL(image types.Image) (string, error) {
 		return "", errors.New("镜像无tag" + normalizedRef.String())
 	}
 
-	host, ErrGetRegistryAddress := GetRegistryAddress(normalizedTaggedRef.Name())
+	host, ErrGetRegistryAddress := GetRegistryAddress(normalizedTaggedRef.Name(), httpClient)
 	img, tag := ref.Path(normalizedTaggedRef), normalizedTaggedRef.Tag()
 
 	if ErrGetRegistryAddress != nil {
@@ -102,22 +101,7 @@ func BuildManifestURL(image types.Image) (string, error) {
 	return url.String(), nil
 }
 
-func GetDigest(url string, token string) (string, error) {
-	tr := &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
-		DialContext: (&net.Dialer{
-			Timeout:   30 * time.Second,
-			KeepAlive: 30 * time.Second,
-		}).DialContext,
-		ForceAttemptHTTP2:     true,
-		MaxIdleConns:          100,
-		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
-		TLSClientConfig:       &tls.Config{InsecureSkipVerify: true},
-	}
-	client := &http.Client{Transport: tr}
-
+func GetDigest(url string, token string, httpClient *http.Client) (string, error) {
 	req, _ := http.NewRequest("HEAD", url, nil)
 
 	if token != "" {
@@ -128,7 +112,7 @@ func GetDigest(url string, token string) (string, error) {
 	req.Header.Add("Accept", "application/vnd.docker.distribution.manifest.v1+json")
 	req.Header.Add("Accept", "application/vnd.oci.image.index.v1+json")
 
-	res, err := client.Do(req)
+	res, err := httpClient.Do(req)
 	if err != nil {
 		return "", err
 	}

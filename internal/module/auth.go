@@ -24,23 +24,22 @@ var DefaultAcceleratorHostList = []string{"docker.1ms.run", "docker.m.daocloud.i
 	"docker.1panel.top", "docker.1panel.live", "proxy.1panel.live", "dockerproxy.1panel.live", "docker.1panel.dev",
 	"docker.anye.in", "hub.rat.dev", "docker.amingg.com"}
 
-func GetToken(image types.Image, registryAuth string) (string, error) {
+func GetToken(image types.Image, registryAuth string, httpClient *http.Client) (string, error) {
 	logx.Infof("image name %s", image.ImageName)
 	normalizedRef, err := ref.ParseNormalizedNamed(image.ImageName)
 	if err != nil {
 		return "", err
 	}
 
-	URL := GetChallengeURL(normalizedRef)
+	URL := GetChallengeURL(normalizedRef, httpClient)
 
 	var req *http.Request
 	if req, err = GetChallengeRequest(URL); err != nil {
 		return "", err
 	}
 
-	client := &http.Client{}
 	var res *http.Response
-	if res, err = client.Do(req); err != nil {
+	if res, err = httpClient.Do(req); err != nil {
 		return "", err
 	}
 	defer func(Body io.ReadCloser) {
@@ -60,7 +59,7 @@ func GetToken(image types.Image, registryAuth string) (string, error) {
 		return fmt.Sprintf("Basic %s", registryAuth), nil
 	}
 	if strings.HasPrefix(challenge, "bearer") {
-		return GetBearerHeader(challenge, normalizedRef, registryAuth)
+		return GetBearerHeader(challenge, normalizedRef, registryAuth, httpClient)
 	}
 
 	return "", errors.New("unsupported challenge type from registry")
@@ -76,8 +75,7 @@ func GetChallengeRequest(URL url.URL) (*http.Request, error) {
 	return req, nil
 }
 
-func GetBearerHeader(challenge string, imageRef ref.Named, registryAuth string) (string, error) {
-	client := http.Client{}
+func GetBearerHeader(challenge string, imageRef ref.Named, registryAuth string, httpClient *http.Client) (string, error) {
 	authURL, err := GetAuthURL(challenge, imageRef)
 
 	if err != nil {
@@ -97,7 +95,7 @@ func GetBearerHeader(challenge string, imageRef ref.Named, registryAuth string) 
 	}
 
 	var authResponse *http.Response
-	if authResponse, err = client.Do(r); err != nil {
+	if authResponse, err = httpClient.Do(r); err != nil {
 		return "", err
 	}
 
@@ -143,8 +141,8 @@ func GetAuthURL(challenge string, imageRef ref.Named) (*url.URL, error) {
 	return authURL, nil
 }
 
-func GetChallengeURL(imageRef ref.Named) url.URL {
-	host, _ := GetRegistryAddress(imageRef.Name())
+func GetChallengeURL(imageRef ref.Named, httpClient *http.Client) url.URL {
+	host, _ := GetRegistryAddress(imageRef.Name(), httpClient)
 
 	URL := url.URL{
 		Scheme: "https",
@@ -154,7 +152,7 @@ func GetChallengeURL(imageRef ref.Named) url.URL {
 	return URL
 }
 
-func GetRegistryAddress(imageRef string) (string, error) {
+func GetRegistryAddress(imageRef string, httpClient *http.Client) (string, error) {
 	normalizedRef, err := ref.ParseNormalizedNamed(imageRef)
 	if err != nil {
 		return "", err
@@ -163,11 +161,11 @@ func GetRegistryAddress(imageRef string) (string, error) {
 	address := ref.Domain(normalizedRef)
 
 	if address == DefaultRegistryDomain {
-		if checkHost(DefaultRegistryHost) {
+		if checkHost(DefaultRegistryHost, httpClient) {
 			address = DefaultRegistryHost
 		} else {
 			for _, host := range DefaultAcceleratorHostList {
-				if checkHost(host) {
+				if checkHost(host, httpClient) {
 					address = host
 					break
 				}
@@ -180,14 +178,13 @@ func GetRegistryAddress(imageRef string) (string, error) {
 	return address, nil
 }
 
-func checkHost(host string) bool {
+func checkHost(host string, httpClient *http.Client) bool {
 	URL := "https://" + host + "/v2/"
-	// 创建带有超时设置的 http.Client
-	client := http.Client{
-		Timeout: 5 * time.Second,
+	shortClient := &http.Client{
+		Transport: httpClient.Transport,
+		Timeout:   5 * time.Second,
 	}
-	// 发送 HEAD 请求
-	resp, err := client.Get(URL)
+	resp, err := shortClient.Get(URL)
 	if err != nil {
 		logx.Errorf("Failed to connect to %s: %s", URL, err)
 		return false

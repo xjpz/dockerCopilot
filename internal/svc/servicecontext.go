@@ -1,6 +1,8 @@
 package svc
 
 import (
+	"net/http"
+
 	"github.com/docker/docker/client"
 	"github.com/onlyLTY/dockerCopilot/internal/config"
 	"github.com/onlyLTY/dockerCopilot/internal/module"
@@ -20,6 +22,7 @@ type ServiceContext struct {
 	IndexCheckMiddleware       rest.Middleware
 	ProgressStore              ProgressStoreType
 	DockerClient               *client.Client
+	HTTPClient                 *http.Client
 	mu                         sync.Mutex
 }
 
@@ -35,15 +38,20 @@ type TaskProgress struct {
 type ProgressStoreType map[string]TaskProgress
 
 func NewServiceContext(c config.Config) *ServiceContext {
+	ApplyProxyEnv(c.Proxy)
+
+	httpClient := NewHTTPClient(c.Proxy, WithInsecureSkipVerify(c.Proxy.InsecureSkipVerify))
+
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		logx.Errorf("Unable to create docker client: %s", err)
 	}
 	return &ServiceContext{
 		Config:        c,
-		HubImageInfo:  module.NewImageCheck(),
+		HubImageInfo:  module.NewImageCheck(httpClient),
 		ProgressStore: make(ProgressStoreType),
 		DockerClient:  cli,
+		HTTPClient:    httpClient,
 	}
 }
 
