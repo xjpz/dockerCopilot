@@ -39,39 +39,48 @@ func (i *ImageUpdateData) CheckUpdate(imageList []types.Image) {
 }
 
 func (i *ImageUpdateData) checkSingleImage(image types.Image) {
+	imageKey := image.ImageName + ":" + image.ImageTag
 	token, err := GetToken(image, "", i.httpClient)
 	if err != nil {
-		logx.Error("获取token失败或者无需获取token，继续尝试检查" + err.Error())
+		logx.Errorf("[%s] 获取token失败，继续尝试: %s", imageKey, err.Error())
 	}
 	digestURL, err := BuildManifestURL(image, i.httpClient)
 	if err != nil {
-		logx.Error("获取digestURL失败" + err.Error())
+		logx.Errorf("[%s] 构建manifest URL失败: %s", imageKey, err.Error())
 		return
 	}
 	remoteDigest, err := GetDigest(digestURL, token, i.httpClient)
 	if err != nil {
-		logx.Error("获取digest失败" + err.Error())
+		logx.Errorf("[%s] 获取远端digest失败: %s", imageKey, err.Error())
 		return
 	}
 	if len(image.RepoDigests) == 0 {
-		logx.Error("未在本地获取到repoDigest" + image.ImageName + ":" + image.ImageTag)
+		logx.Errorf("[%s] 本地无repoDigest，跳过", imageKey)
 		return
 	}
-	needUpdate := false
-	for _, localRepoDigests := range image.RepoDigests {
-		localDigest := strings.Split(localRepoDigests, "@")[1]
-		if remoteDigest != localDigest {
-			if remoteDigest == "" || localDigest == "" {
-				logx.Error("Digest为空" + image.ImageName + ":" + image.ImageTag)
-				continue
-			}
-			logx.Info(image.ImageName + ":" + image.ImageTag + " need update")
-			logx.Infof("localDigest: %s, remoteDigest: %s", localDigest, remoteDigest)
-			needUpdate = true
-		} else {
-			logx.Info(image.ImageName + ":" + image.ImageTag + " not need update")
-			needUpdate = false
+	if remoteDigest == "" {
+		logx.Errorf("[%s] 远端digest为空，跳过", imageKey)
+		return
+	}
+
+	needUpdate := true
+	for _, localRepoDigest := range image.RepoDigests {
+		parts := strings.SplitN(localRepoDigest, "@", 2)
+		if len(parts) != 2 {
+			continue
 		}
+		if parts[1] == "" {
+			continue
+		}
+		if remoteDigest == parts[1] {
+			needUpdate = false
+			break
+		}
+	}
+	if needUpdate {
+		logx.Infof("[%s] 有更新可用 (remoteDigest: %s)", imageKey, remoteDigest)
+	} else {
+		logx.Infof("[%s] 已是最新", imageKey)
 	}
 	i.Data[image.ID] = ImageCheckList{NeedUpdate: needUpdate}
 }
@@ -102,7 +111,19 @@ func BuildManifestURL(image types.Image, httpClient *http.Client) (string, error
 }
 
 func GetDigest(url string, token string, httpClient *http.Client) (string, error) {
-	req, _ := http.NewRequest("HEAD", url, nil)
+	digest, err := requestDigest("HEAD", url, token, httpClient)
+	if err != nil {
+		logx.Infof("HEAD 请求获取digest失败，尝试GET: %s", err.Error())
+		return requestDigest("GET", url, token, httpClient)
+	}
+	return digest, nil
+}
+
+func requestDigest(method string, url string, token string, httpClient *http.Client) (string, error) {
+	req, err := http.NewRequest(method, url, nil)
+	if err != nil {
+		return "", err
+	}
 
 	if token != "" {
 		req.Header.Add("Authorization", token)
@@ -119,16 +140,24 @@ func GetDigest(url string, token string, httpClient *http.Client) (string, error
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
 		if err != nil {
-			logx.Error("GetDigest关闭body失败" + err.Error())
+			logx.Error("关闭body失败" + err.Error())
 		}
 	}(res.Body)
+
+	if method == "GET" {
+		io.Copy(io.Discard, res.Body)
+	}
 
 	if res.StatusCode != 200 {
 		wwwAuthHeader := res.Header.Get("www-authenticate")
 		if wwwAuthHeader == "" {
 			wwwAuthHeader = "not present"
 		}
-		return "", fmt.Errorf("registry responded to head request with %q, auth: %q", res.Status, wwwAuthHeader)
+		return "", fmt.Errorf("%s %s responded with %q, auth: %q", method, url, res.Status, wwwAuthHeader)
 	}
-	return res.Header.Get(ContentDigestHeader), nil
+	digest := res.Header.Get(ContentDigestHeader)
+	if digest == "" {
+		return "", fmt.Errorf("%s %s 响应中无 %s header", method, url, ContentDigestHeader)
+	}
+	return digest, nil
 }
