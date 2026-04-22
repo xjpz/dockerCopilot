@@ -31,7 +31,7 @@ func NewImageCheck(httpClient *http.Client) *ImageUpdateData {
 }
 func (i *ImageUpdateData) CheckUpdate(imageList []types.Image) {
 	for _, image := range imageList {
-		if strings.Contains(image.ImageName, "0nlylty/dockercopilot") {
+		if strings.Contains(image.ImageName, "0nlylty/dockercopilot") || strings.Contains(image.ImageName, "xjpz/dockercopilot") {
 			continue
 		}
 		i.checkSingleImage(image)
