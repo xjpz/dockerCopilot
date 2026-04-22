@@ -72,6 +72,12 @@ jobs:
             -ldflags="-w -s -X 'github.com/onlyLTY/dockerCopilot/internal/config.Version=${{ env.version }}' -X 'github.com/onlyLTY/dockerCopilot/internal/config.BuildDate=$(date)'" \
             -o release/dockerCopilot-${{ matrix.arch }} .
 
+      - name: Upload ${{ matrix.arch }} docker binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-docker-binary-${{ matrix.arch }}
+          path: release/dockerCopilot-${{ matrix.arch }}
+
       - name: Package ${{ matrix.arch }}
         run: cd release && tar -czf dockerCopilot-${{ matrix.arch }}.tar.gz dockerCopilot-${{ matrix.arch }} && rm dockerCopilot-${{ matrix.arch }}
 
@@ -80,12 +86,6 @@ jobs:
         with:
           name: release-binary-${{ matrix.arch }}
           path: release/dockerCopilot-${{ matrix.arch }}.tar.gz
-
-      - name: Upload ${{ matrix.arch }} docker binary
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-docker-binary-${{ matrix.arch }}
-          path: release/dockerCopilot-${{ matrix.arch }}
 
   build-docker:
     needs: [ build-binaries ]
