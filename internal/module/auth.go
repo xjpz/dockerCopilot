@@ -8,6 +8,7 @@ import (
 	"github.com/onlyLTY/dockerCopilot/internal/types"
 	"github.com/zeromicro/go-zero/core/logx"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -181,8 +182,10 @@ func GetRegistryAddress(imageRef string, httpClient *http.Client) (string, error
 func checkHost(host string, httpClient *http.Client) bool {
 	URL := "https://" + host + "/v2/"
 	shortClient := &http.Client{
-		Transport: httpClient.Transport,
-		Timeout:   5 * time.Second,
+		Transport: &http.Transport{
+			DialContext: (&net.Dialer{Timeout: 5 * time.Second}).DialContext,
+		},
+		Timeout: 5 * time.Second,
 	}
 	resp, err := shortClient.Get(URL)
 	if err != nil {
@@ -196,7 +199,6 @@ func checkHost(host string, httpClient *http.Client) bool {
 		}
 	}(resp.Body)
 
-	// 检查 HTTP 响应状态码
 	if resp.StatusCode == http.StatusOK ||
 		resp.StatusCode == http.StatusUnauthorized {
 		return true
