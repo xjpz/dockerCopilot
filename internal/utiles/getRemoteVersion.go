@@ -11,7 +11,7 @@ import (
 )
 
 func GetRemoteVersion(httpClient *http.Client) (remoteVersion string, err error) {
-	versionURL := buildGitHubURL("https://raw.githubusercontent.com/onlyLTY/dockerCopilot/UGREEN/version")
+	versionURL := buildGitHubURL("https://raw.githubusercontent.com/xjpz/dockerCopilot/latest/version")
 	remoteVersion, err = fetchVersionFromURL(httpClient, versionURL)
 	if err != nil {
 		return "0.0.0", err

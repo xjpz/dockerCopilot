@@ -15,8 +15,8 @@ import (
 )
 
 func UpdateProgram(ctx *svc.ServiceContext) error {
-	versionURL := buildGitHubURL("https://raw.githubusercontent.com/onlyLTY/dockerCopilot/UGREEN/version")
-	releaseBaseURL := buildGitHubURL("https://github.com/onlyLTY/dockerCopilot/releases/download")
+	versionURL := buildGitHubURL("https://raw.githubusercontent.com/xjpz/dockerCopilot/latest/version")
+	releaseBaseURL := buildGitHubURL("https://github.com/xjpz/dockerCopilot/releases/download")
 	logx.Infof("versionURL: %s", versionURL)
 	resp, err := ctx.HTTPClient.Get(versionURL)
 	if err != nil {
