@@ -72,14 +72,20 @@ jobs:
       - name: Package ${{ matrix.arch }}
         run: cd release && tar -czf dockerCopilot-${{ matrix.arch }}.tar.gz dockerCopilot-${{ matrix.arch }} && rm dockerCopilot-${{ matrix.arch }}
 
-      - name: Upload ${{ matrix.arch }} artifact
+      - name: Upload ${{ matrix.arch }} binary
         uses: actions/upload-artifact@v4
         with:
           name: release-binary-${{ matrix.arch }}
           path: release/dockerCopilot-${{ matrix.arch }}.tar.gz
 
+      - name: Upload ${{ matrix.arch }} docker binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-docker-binary-${{ matrix.arch }}
+          path: release/dockerCopilot-${{ matrix.arch }}
+
   build-docker:
-    needs: [ build-frontend ]
+    needs: [ build-binaries ]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -91,11 +97,26 @@ jobs:
           name: release-front-dist
           path: front
 
+      - name: Download amd64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: release-docker-binary-amd64
+          path: release
+
+      - name: Download arm64 binary
+        uses: actions/download-artifact@4
+        with:
+          name: release-docker-binary-arm64
+          path: release
+
       - name: Prepare build context
         run: |
           mkdir -p dc-back/dist/linux/amd64 dc-back/dist/linux/arm64
+          cp release/dockerCopilot-amd64 dc-back/dist/linux/amd64/dockerCopilot
+          cp release/dockerCopilot-arm64 dc-back/dist/linux/arm64/dockerCopilot
           cp -r etc dc-back/etc
           cp start.sh dc-back/start.sh
+          rm -rf release
 
       - name: Get version from tag
         id: get_version
