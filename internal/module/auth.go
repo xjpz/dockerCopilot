@@ -162,6 +162,10 @@ func GetRegistryAddress(imageRef string, httpClient *http.Client) (string, error
 	address := ref.Domain(normalizedRef)
 
 	if address == DefaultRegistryDomain {
+		if httpClient.Transport != nil && isProxyConfigured(httpClient.Transport) {
+			logx.Info("已配置代理，直接使用 index.docker.io")
+			return DefaultRegistryHost, nil
+		}
 		if checkHost(DefaultRegistryHost, httpClient) {
 			address = DefaultRegistryHost
 		} else {
@@ -177,6 +181,17 @@ func GetRegistryAddress(imageRef string, httpClient *http.Client) (string, error
 		}
 	}
 	return address, nil
+}
+
+func isProxyConfigured(transport http.RoundTripper) bool {
+	if tr, ok := transport.(*http.Transport); ok && tr.Proxy != nil {
+		req, _ := http.NewRequest("GET", "https://check.example.com", nil)
+		if req != nil {
+			proxyURL, err := tr.Proxy(req)
+			return err == nil && proxyURL != nil
+		}
+	}
+	return false
 }
 
 func checkHost(host string, httpClient *http.Client) bool {
