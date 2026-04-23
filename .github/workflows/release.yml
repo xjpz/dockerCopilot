@@ -151,6 +151,8 @@ jobs:
   create-release:
     needs: [ build-binaries ]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Download amd64 binary
         uses: actions/download-artifact@v4
